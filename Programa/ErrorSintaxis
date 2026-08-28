@@ -1,0 +1,27 @@
+class ErrorSintaxis(Exception):
+ """
+ En esta clase se representa un error de sintaxis o de lexico que se detecta
+ al analizar una línea de archivo de entrada
+ Si se acumulan en una lista en lugar de detener la ejecución
+ """
+def __init__(self, linea_num: int, mensaje: str, contenido: str = ""):
+    # Guarda el número de línea donde ocurrió el error
+    self.linea_num = linea_num
+
+    # Guarda la descripción del error
+    self.mensaje = mensaje
+
+    # Guarda el contenido de la línea, por defecto, queda vacío
+    self.contenido = contenido
+
+    # Inicializa la excepción base con un mensaje general
+    super().__init__(f"Línea {linea_num}: {mensaje}")
+
+
+def __str__(self) -> str:
+    # Agrega el contenido de la línea si fue proporcionado
+    # strip() elimina espacios al inicio y al final
+    extra = f"  -> '{self.contenido.strip()}'" if self.contenido else ""
+
+    # Devuelve una representación detallada del error
+    return f"[Línea {self.linea_num}] {self.mensaje}{extra}"
