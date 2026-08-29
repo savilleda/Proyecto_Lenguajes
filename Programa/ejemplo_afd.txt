@@ -1,0 +1,12 @@
+NOMBRE: Multiplos_de_3_en_binario_simplificado
+ESTADOS: q0,q1,q2
+ALFABETO: a,b
+INICIAL: q0
+FINALES: q2
+TRANSICIONES:
+q0,a,q1
+q0,b,q0
+q1,a,q1
+q1,b,q2
+q2,a,q2
+q2,b,q2
