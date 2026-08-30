@@ -42,7 +42,7 @@ class AFD:
         estado_inicial (str): Estado q0, punto de partida de la computación.
         estados_finales (Set[str]): Conjunto F de estados de aceptación.
     """
-
+    
     def __init__(
         self,
         nombre: str = "AFD_Sin_Nombre",
@@ -176,6 +176,28 @@ class AFD:
 
         es_determinista = len(reportes) == 0
         return es_determinista, reportes
+
+    def completar_con_estado_trampa(self, nombre_trampa: str = "q_trampa") -> str:
+        """Agrega un estado sumidero para completar un AFD parcial sin
+        alterar el lenguaje reconocido. Devuelve "" si ya estaba completo."""
+        base, contador = nombre_trampa, 0
+        while nombre_trampa in self.estados:
+            contador += 1
+            nombre_trampa = f"{base}_{contador}"
+
+        faltantes = [
+            (q, a) for q in self.estados for a in self.alfabeto
+            if (q, a) not in self.transiciones
+        ]
+        if not faltantes:
+            return ""
+
+        self.estados.add(nombre_trampa)
+        for (q, a) in faltantes:
+            self.transiciones[(q, a)] = nombre_trampa
+        for a in self.alfabeto:
+            self.transiciones[(nombre_trampa, a)] = nombre_trampa
+        return nombre_trampa
 
     # ------------------------------------------------------------------
     # ANÁLISIS ESTRUCTURAL AVANZADO (ALCANZABILIDAD)

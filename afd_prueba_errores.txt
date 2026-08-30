@@ -1,0 +1,13 @@
+NOMBRE: AFD_Prueba_Validaciones
+ESTADOS: q0,q1,q2,2malo,q0
+ALFABETO: a,b,,a
+INICIAL: q0
+FINALES: q2
+TRANSICIONES:
+q0,a,q1
+q0,a,q2
+q0,b,q0
+q1,a,q1
+q1,epsilon,q2
+esto no es una linea valida
+q9,b,q1

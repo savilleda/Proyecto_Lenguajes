@@ -1,0 +1,18 @@
+NOMBRE: AFD_Mixto
+ESTADOS: q0,q1,q2
+ALFABETO: a,b,0,1
+INICIAL: q0
+FINALES: q2
+TRANSICIONES:
+q0,a,q1
+q0,b,q0
+q0,0,q0
+q0,1,q1
+q1,a,q1
+q1,b,q2
+q1,0,q0
+q1,1,q1
+q2,a,q2
+q2,b,q2
+q2,0,q2
+q2,1,q2

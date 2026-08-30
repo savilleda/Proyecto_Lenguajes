@@ -41,19 +41,39 @@ PATRON_BLOQUE_TRANSICIONES = re.compile(
 PATRON_LINEA_TRANSICION = re.compile(
     r"^\s*([^,\s]+)\s*,\s*([^,\s]+)\s*,\s*([^,\s]+)\s*$"
 )
+TOKENS_EPSILON = {"", "epsilon", "eps", "ε", "landa", "λ", "lambda"}
+PATRON_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+PATRON_SIMBOLO_ALFABETO = re.compile(r"^[^,\s]+$")
 
 
-def _dividir_lista(texto: str) -> Set[str]:
+def _dividir_lista(
+    texto: str, advertencias: list = None, tipo: str = "estado"
+) -> Set[str]:
     """Convierte una cadena separada por comas en un conjunto de tokens limpios.
 
     Args:
         texto: Cadena tipo "q0, q1,q2" tal como aparece en el archivo.
+        advertencias: Lista opcional donde registrar tokens inválidos.
+        tipo: Tipo de validación a aplicar: 'estado' o 'alfabeto'.
 
     Returns:
         Set[str]: Conjunto de elementos sin espacios en blanco y sin
         elementos vacíos.
     """
-    return {token.strip() for token in texto.split(",") if token.strip() != ""}
+    resultado = set()
+    patron = PATRON_ID if tipo == "estado" else PATRON_SIMBOLO_ALFABETO
+    etiqueta = "Identificador" if tipo == "estado" else "Símbolo del alfabeto"
+
+    for token in texto.split(","):
+        token = token.strip()
+        if token == "":
+            continue
+        if not patron.match(token):
+            if advertencias is not None:
+                advertencias.append(f"{etiqueta} inválido ignorado: '{token}'.")
+            continue
+        resultado.add(token)
+    return resultado
 
 
 # ----------------------------------------------------------------------
@@ -118,11 +138,13 @@ def leer_afd_desde_archivo(ruta: str) -> Tuple[Optional[AFD], list]:
         return None, ["Falta la sección obligatoria 'INICIAL:' en el archivo."]
 
     nombre = coincidencia_nombre.group(1).strip() if coincidencia_nombre else "AFD_Importado"
-    estados = _dividir_lista(coincidencia_estados.group(1))
-    alfabeto = _dividir_lista(coincidencia_alfabeto.group(1))
+    estados = _dividir_lista(coincidencia_estados.group(1), advertencias, tipo="estado")
+    alfabeto = _dividir_lista(coincidencia_alfabeto.group(1), advertencias, tipo="alfabeto")
     estado_inicial = coincidencia_inicial.group(1).strip()
     estados_finales = (
-        _dividir_lista(coincidencia_finales.group(1)) if coincidencia_finales else set()
+        _dividir_lista(coincidencia_finales.group(1), advertencias, tipo="estado")
+        if coincidencia_finales
+        else set()
     )
 
     if not coincidencia_finales:
@@ -140,7 +162,10 @@ def leer_afd_desde_archivo(ruta: str) -> Tuple[Optional[AFD], list]:
         )
     else:
         bloque = coincidencia_transiciones.group(1)
+        offset_lineas = contenido[:coincidencia_transiciones.start(1)].count("\n")
+
         for numero_linea, linea in enumerate(bloque.splitlines(), start=1):
+            numero_linea_real = offset_lineas + numero_linea
             linea_limpia = linea.strip()
             if linea_limpia == "" or linea_limpia.startswith("#"):
                 # Se ignoran líneas vacías y comentarios (prefijo '#').
@@ -149,12 +174,20 @@ def leer_afd_desde_archivo(ruta: str) -> Tuple[Optional[AFD], list]:
             coincidencia = PATRON_LINEA_TRANSICION.match(linea_limpia)
             if not coincidencia:
                 advertencias.append(
-                    f"Línea de transición mal formada (ignorada): '{linea_limpia}' "
+                    f"[Línea {numero_linea_real}] Transición mal formada (ignorada): '{linea_limpia}' "
                     f"(se esperaba 'origen,simbolo,destino')."
                 )
                 continue
 
             origen, simbolo, destino = coincidencia.groups()
+            if simbolo.strip().lower() in TOKENS_EPSILON:
+                advertencias.append(
+                    f"[Línea {numero_linea_real}] Transición-ε detectada en '{linea_limpia}': "
+                    f"un AFD no admite transiciones que no consuman símbolo "
+                    f"(esto corresponde a un AFND/AFN-ε, no a un AFD)."
+                )
+                continue
+
             clave = (origen, simbolo)
 
             if clave in transiciones and transiciones[clave] != destino:
@@ -163,7 +196,7 @@ def leer_afd_desde_archivo(ruta: str) -> Tuple[Optional[AFD], list]:
                 conflictos.setdefault(clave, {transiciones[clave]})
                 conflictos[clave].add(destino)
                 advertencias.append(
-                    f"Transición múltiple detectada para {clave}: ya existía "
+                    f"[Línea {numero_linea_real}] Transición múltiple detectada para {clave}: ya existía "
                     f"destino '{transiciones[clave]}', se ignora el nuevo "
                     f"destino '{destino}' (se conserva el primero registrado)."
                 )
@@ -189,11 +222,12 @@ def leer_afd_desde_archivo(ruta: str) -> Tuple[Optional[AFD], list]:
 # ----------------------------------------------------------------------
 # CARGA MANUAL INTERACTIVA POR CONSOLA
 # ----------------------------------------------------------------------
-def _solicitar_lista_no_vacia(mensaje: str) -> Set[str]:
+def _solicitar_lista_no_vacia(mensaje: str, tipo: str = "estado") -> Set[str]:
     """Solicita al usuario una lista separada por comas, sin permitir vacío.
 
     Args:
         mensaje: Texto de solicitud mostrado al usuario.
+        tipo: Tipo de validación a aplicar: 'estado' o 'alfabeto'.
 
     Returns:
         Set[str]: Conjunto de elementos ingresados.
@@ -205,7 +239,7 @@ def _solicitar_lista_no_vacia(mensaje: str) -> Set[str]:
             print("\nEntrada cancelada. Se usará una lista vacía.")
             return set()
 
-        elementos = _dividir_lista(entrada)
+        elementos = _dividir_lista(entrada, tipo=tipo)
         if not elementos:
             print("  [!] Debe ingresar al menos un elemento. Intente de nuevo.")
             continue
@@ -229,8 +263,8 @@ def leer_afd_manual() -> Optional[AFD]:
     try:
         nombre = input("Nombre del AFD: ").strip() or "AFD_Manual"
 
-        estados = _solicitar_lista_no_vacia("Estados (separados por comas), ej. q0,q1,q2: ")
-        alfabeto = _solicitar_lista_no_vacia("Alfabeto (separados por comas), ej. a,b: ")
+        estados = _solicitar_lista_no_vacia("Estados (separados por comas), ej. q0,q1,q2: ", tipo="estado")
+        alfabeto = _solicitar_lista_no_vacia("Alfabeto (separados por comas), ej. a,b o 0,1: ", tipo="alfabeto")
 
         # --- Validación del estado inicial contra el conjunto Q ---
         while True:
@@ -244,7 +278,7 @@ def leer_afd_manual() -> Optional[AFD]:
             entrada_finales = input(
                 f"Estados finales (separados por comas, subconjunto de {sorted(estados)}): "
             ).strip()
-            estados_finales = _dividir_lista(entrada_finales)
+            estados_finales = _dividir_lista(entrada_finales, tipo="estado")
             invalidos = estados_finales - estados
             if invalidos:
                 print(f"  [!] Los siguientes estados no existen en Q: {sorted(invalidos)}. Intente de nuevo.")

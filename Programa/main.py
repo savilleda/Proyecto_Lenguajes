@@ -115,6 +115,15 @@ class AplicacionAFD:
             return
         print("\n" + self.afd_actual.generar_reporte_validacion())
 
+        _, faltantes = self.afd_actual.verificar_determinismo()
+        hay_incompletas = any("faltante" in r for r in faltantes)
+        if hay_incompletas:
+            resp = input("\n¿Desea completar el AFD con un estado trampa? (s/n): ").strip().lower()
+            if resp == "s":
+                trampa = self.afd_actual.completar_con_estado_trampa()
+                if trampa:
+                    print(f"[OK] Se agregó el estado trampa '{trampa}'. El AFD ahora es completo.")
+
     def opcion_evaluar_cadena(self) -> None:
         """Opción 6: Solicita una cadena y muestra su traza de evaluación paso a paso."""
         if not self._hay_afd_cargado():
