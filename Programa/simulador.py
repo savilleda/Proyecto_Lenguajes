@@ -19,7 +19,7 @@ from afd import AFD
 class ResultadoEvaluacion:
     """Representa el resultado de evaluar una única cadena sobre un AFD.
 
-    Attributes:
+    Atributos:
         cadena (str): Cadena de entrada evaluada.
         aceptada (bool): True si la cadena fue aceptada por el autómata.
         traza (List[str]): Lista de pasos de la computación, en formato
@@ -29,13 +29,12 @@ class ResultadoEvaluacion:
     """
 
     def __init__(self, cadena: str, aceptada: bool, traza: List[str], motivo: str) -> None:
-        """Inicializa el resultado de una evaluación.
+        """Inicializa el resultado de una evaluación
 
-        Args:
             cadena: Cadena evaluada.
-            aceptada: Veredicto final (True = aceptada, False = rechazada).
-            traza: Lista de líneas que documentan cada paso de la simulación.
-            motivo: Texto explicando el veredicto.
+            aceptada: Veredicto final (True = aceptada, False = rechazada)
+            traza: Lista de líneas que documentan cada paso de la simulación
+            motivo: Texto explicando el veredicto
         """
         self.cadena = cadena
         self.aceptada = aceptada
@@ -43,10 +42,10 @@ class ResultadoEvaluacion:
         self.motivo = motivo
 
     def __str__(self) -> str:
-        """Representación legible en una sola línea del resultado.
+        """Representación legible en una sola línea del resultado
 
         Returns:
-            str: Cadena con el veredicto resumido.
+            str: Cadena con el veredicto resumido
         """
         veredicto = "ACEPTADA" if self.aceptada else "RECHAZADA"
         cadena_mostrar = self.cadena if self.cadena != "" else "ε (cadena vacía)"
@@ -54,45 +53,43 @@ class ResultadoEvaluacion:
 
 
 class Simulador:
-    """Motor de simulación de un AFD sobre cadenas de entrada.
+    """Motor de simulación de un AFD sobre cadenas de entrada
 
-    Attributes:
+    Atributos:
         historial (List[ResultadoEvaluacion]): Registro acumulado de todas
             las evaluaciones realizadas (individuales y en lote) durante
-            la sesión actual del programa.
+            la sesión actual del programa
     """
 
     def __init__(self) -> None:
-        """Inicializa el simulador con un historial vacío."""
+        """Inicializa el simulador con un historial vacío"""
         self.historial: List[ResultadoEvaluacion] = []
 
-    # ------------------------------------------------------------------
-    # EVALUACIÓN DE UNA CADENA INDIVIDUAL CON TRAZA PASO A PASO
-    # ------------------------------------------------------------------
     def evaluar_cadena(self, afd: AFD, cadena: str, mostrar_traza: bool = True) -> ResultadoEvaluacion:
-        """Evalúa una cadena sobre el AFD dado, generando la traza de ejecución.
+        """Evalúa una cadena sobre el AFD dado, generando la traza de ejecución
 
         Algoritmo:
             1. Se verifica que todos los símbolos de la cadena pertenezcan
                a Sigma; si no, se rechaza inmediatamente sin simular.
-            2. Se inicia en el estado q0.
+            2. Se inicia en el estado q0
             3. Por cada símbolo de la cadena, se consulta delta(estado, símbolo)
                en el diccionario de transiciones. Si no existe, la cadena se
-               rechaza (autómata incompleto / trampa implícita).
+               rechaza (autómata incompleto / trampa implícita)
             4. Al finalizar la cadena, se acepta si el estado final de la
-               computación pertenece a F; en caso contrario, se rechaza.
+               computación pertenece a F; en caso contrario, se rechaza
 
-        Args:
-            afd: Instancia de `AFD` sobre la cual se simula la cadena.
-            cadena: Cadena de símbolos a evaluar (puede ser vacía, ε).
-            mostrar_traza: Si True, imprime la traza paso a paso en consola.
+            afd: Instancia de `AFD` sobre la cual se simula la cadena
+            cadena: Cadena de símbolos a evaluar (puede ser vacía, ε)
+            mostrar_traza: Si True, imprime la traza paso a paso en consola
 
-        Returns:
-            ResultadoEvaluacion: Objeto con el veredicto, la traza y el motivo.
+      
+            ResultadoEvaluacion: Objeto con el veredicto, la traza y el motivo
         """
+        from validador import ValidadorAutomata
+        ValidadorAutomata().exigir_afd(afd)
         traza: List[str] = []
 
-        # --- Paso previo obligatorio: validar que la cadena use solo Sigma ---
+    
         simbolos_invalidos = [s for s in cadena if s not in afd.alfabeto]
         if simbolos_invalidos:
             motivo = (
@@ -105,12 +102,11 @@ class Simulador:
             self.historial.append(resultado)
             return resultado
 
-        # --- Simulación símbolo a símbolo sobre delta ---
+        
         estado_actual = afd.estado_inicial
         for simbolo in cadena:
             siguiente = afd.transiciones.get((estado_actual, simbolo))
             if siguiente is None:
-                # No existe transición definida: rechazo por autómata incompleto.
                 traza.append(
                     f"[{estado_actual}] --({simbolo})--> [SIN TRANSICIÓN DEFINIDA]"
                 )
@@ -127,7 +123,6 @@ class Simulador:
             traza.append(f"[{estado_actual}] --({simbolo})--> [{siguiente}]")
             estado_actual = siguiente
 
-        # --- Veredicto final según pertenencia a F ---
         aceptada = estado_actual in afd.estados_finales
         if aceptada:
             motivo = f"El estado final de la computación '{estado_actual}' pertenece a F."
@@ -141,65 +136,49 @@ class Simulador:
         return resultado
 
     def _imprimir_traza(self, resultado: ResultadoEvaluacion) -> None:
-        """Imprime en consola la traza paso a paso de una evaluación.
-
-        Args:
-            resultado: Objeto `ResultadoEvaluacion` ya calculado.
+        """Imprime en consola la traza paso a paso de una evaluación
         """
         cadena_mostrar = resultado.cadena if resultado.cadena != "" else "ε (cadena vacía)"
         print(f"\n--- TRAZA DE EJECUCIÓN: '{cadena_mostrar}' ---")
         if not resultado.traza:
-            print("  (Sin pasos: la cadena es vacía o fue rechazada antes de simular).")
+            print("  (Sin pasos: la cadena es vacía o fue rechazada antes de simular)")
         for paso in resultado.traza:
             print(f"  {paso}")
         veredicto = "ACEPTADA" if resultado.aceptada else "RECHAZADA"
         print(f"Veredicto final: {veredicto}")
         print(f"Motivo: {resultado.motivo}\n")
 
-    # ------------------------------------------------------------------
-    # EVALUACIÓN POR LOTE DESDE ARCHIVO
-    # ------------------------------------------------------------------
+
     def evaluar_lote(self, afd: AFD, ruta: str) -> Tuple[List[ResultadoEvaluacion], List[str]]:
-        """Evalúa un conjunto de cadenas leídas desde un archivo de texto.
+        """Evalúa un conjunto de cadenas leídas desde un archivo de texto
 
-        Se espera un archivo con una cadena por línea. Líneas vacías se
-        interpretan como la cadena vacía (ε) únicamente si el usuario las
-        ingresó explícitamente como tal; las líneas realmente en blanco
-        (sin ningún carácter) se omiten para evitar ruido accidental.
+        Se espera una cadena por línea. Una línea vacía representa epsilon.
+        Un archivo de cero bytes no contiene cadenas. No se quitan espacios:
+        forman parte de la entrada y se rechazan si no pertenecen al alfabeto
 
-        Args:
-            afd: Instancia de `AFD` sobre la cual se evaluará cada cadena.
-            ruta: Ruta del archivo de cadenas a procesar.
-
-        Returns:
-            Tuple[List[ResultadoEvaluacion], List[str]]: Una tupla
-            (resultados, advertencias) con el resultado de cada cadena
-            procesada y cualquier advertencia relacionada con la lectura
-            del archivo (por ejemplo, archivo no encontrado).
+            afd: Instancia de `AFD` sobre la cual se evaluará cada cadena
+            ruta: Ruta del archivo de cadenas a procesar
         """
         resultados: List[ResultadoEvaluacion] = []
         advertencias: List[str] = []
 
         if not os.path.isfile(ruta):
-            advertencias.append(f"El archivo '{ruta}' no existe o no es válido.")
+            advertencias.append(f"El archivo '{ruta}' no existe o no es válido")
             return resultados, advertencias
 
         try:
-            with open(ruta, "r", encoding="utf-8") as f:
+            with open(ruta, "r", encoding="utf-8-sig") as f:
                 lineas = f.readlines()
         except (OSError, IOError, UnicodeDecodeError) as error:
             advertencias.append(f"No fue posible leer el archivo '{ruta}': {error}")
             return resultados, advertencias
 
         if not lineas:
-            advertencias.append("El archivo de cadenas está vacío.")
+            advertencias.append("El archivo de cadenas está vacío")
             return resultados, advertencias
 
         for numero_linea, linea in enumerate(lineas, start=1):
             cadena = linea.rstrip("\n").rstrip("\r")
-            if cadena == "":
-                # Se omiten líneas completamente vacías del archivo.
-                continue
             try:
                 resultado = self.evaluar_cadena(afd, cadena, mostrar_traza=False)
                 resultados.append(resultado)
@@ -212,16 +191,10 @@ class Simulador:
         return resultados, advertencias
 
     def generar_reporte_lote(self, resultados: List[ResultadoEvaluacion]) -> str:
-        """Genera un reporte textual resumido de una evaluación por lote.
-
-        Args:
-            resultados: Lista de resultados obtenidos de `evaluar_lote`.
-
-        Returns:
-            str: Reporte con el detalle de cada cadena y estadísticas totales.
+        """Genera un reporte textual resumido de una evaluación por lote
         """
         if not resultados:
-            return "No hay resultados que reportar (lote vacío o no procesado)."
+            return "No hay resultados que reportar (lote vacío o no procesado)"
 
         lineas = ["=== REPORTE DE EVALUACIÓN POR LOTE ==="]
         aceptadas = 0
@@ -237,17 +210,14 @@ class Simulador:
         lineas.append(f"Rechazadas: {total - aceptadas}")
         return "\n".join(lineas)
 
-    # ------------------------------------------------------------------
-    # CONSULTA DE HISTORIAL
-    # ------------------------------------------------------------------
     def mostrar_historial(self) -> str:
-        """Genera un reporte textual de todas las evaluaciones realizadas.
+        """Genera un reporte textual de todas las evaluaciones realizadas
 
         Returns:
-            str: Historial completo de la sesión, numerado cronológicamente.
+            str: Historial completo de la sesión, numerado cronológicamente
         """
         if not self.historial:
-            return "El historial de evaluaciones está vacío."
+            return "El historial de evaluaciones está vacío"
 
         lineas = ["=== HISTORIAL DE EVALUACIONES DE LA SESIÓN ==="]
         for indice, resultado in enumerate(self.historial, start=1):

@@ -12,7 +12,7 @@ Estructuras de datos utilizadas (obligatorio por especificación):
     - delta (transiciones): diccionario (dict) cuya clave es la tupla
       (estado_actual, simbolo) y cuyo valor es el estado_siguiente. Esto
       representa una función matemática delta: Q x Sigma -> Q sin recurrir
-      a estructuras condicionales extensas (if/elif encadenados).
+      a estructuras condicionales extensas (if/elif encadenados)
 """
 
 from typing import Dict, List, Set, Tuple
@@ -66,15 +66,15 @@ class AFD:
         """
         self.nombre: str = nombre
         # Se usan sets para garantizar unicidad automática de elementos.
-        self.estados: Set[str] = estados if estados is not None else set()
-        self.alfabeto: Set[str] = alfabeto if alfabeto is not None else set()
+        self.estados: Set[str] = set(estados) if estados is not None else set()
+        self.alfabeto: Set[str] = set(alfabeto) if alfabeto is not None else set()
         # El diccionario modela directamente delta: (Q x Sigma) -> Q
         self.transiciones: Dict[Tuple[str, str], str] = (
-            transiciones if transiciones is not None else {}
+            dict(transiciones) if transiciones is not None else {}
         )
         self.estado_inicial: str = estado_inicial
         self.estados_finales: Set[str] = (
-            estados_finales if estados_finales is not None else set()
+            set(estados_finales) if estados_finales is not None else set()
         )
 
     # ------------------------------------------------------------------
@@ -93,42 +93,9 @@ class AFD:
             List[str]: Lista de mensajes de error encontrados. Una lista
             vacía indica que la quíntupla es formalmente consistente.
         """
-        errores: List[str] = []
-
-        # 1. Verificar que el estado inicial pertenezca al conjunto de estados.
-        if self.estado_inicial not in self.estados:
-            errores.append(
-                f"El estado inicial '{self.estado_inicial}' no pertenece a Q "
-                f"(conjunto de estados)."
-            )
-
-        # 2. Verificar que F sea subconjunto de Q.
-        finales_invalidos = self.estados_finales - self.estados
-        if finales_invalidos:
-            errores.append(
-                f"Los siguientes estados finales no pertenecen a Q: "
-                f"{sorted(finales_invalidos)}."
-            )
-
-        # 3. Verificar consistencia de cada transición registrada.
-        for (origen, simbolo), destino in self.transiciones.items():
-            if origen not in self.estados:
-                errores.append(
-                    f"Transición inválida: el estado origen '{origen}' "
-                    f"no pertenece a Q."
-                )
-            if simbolo not in self.alfabeto:
-                errores.append(
-                    f"Transición inválida: el símbolo '{simbolo}' "
-                    f"no pertenece a Sigma (alfabeto)."
-                )
-            if destino not in self.estados:
-                errores.append(
-                    f"Transición inválida: el estado destino '{destino}' "
-                    f"(desde '{origen}' con '{simbolo}') no pertenece a Q."
-                )
-
-        return errores
+        # Se centralizan las reglas para usarlas también con AFND.
+        from validador import ValidadorAutomata
+        return ValidadorAutomata().errores(self)
 
     # ------------------------------------------------------------------
     # VERIFICACIÓN DE DETERMINISTICIDAD
@@ -179,7 +146,9 @@ class AFD:
 
     def completar_con_estado_trampa(self, nombre_trampa: str = "q_trampa") -> str:
         """Agrega un estado sumidero para completar un AFD parcial sin
-        alterar el lenguaje reconocido. Devuelve "" si ya estaba completo."""
+        alterar el lenguaje reconocido. Devuelve "" si ya estaba completo"""
+        from validador import ValidadorAutomata
+        ValidadorAutomata().exigir_afd(self, completo=False)
         base, contador = nombre_trampa, 0
         while nombre_trampa in self.estados:
             contador += 1
@@ -210,7 +179,7 @@ class AFD:
         el estado actual.
 
         Returns:
-            Set[str]: Conjunto de estados alcanzables desde el estado inicial.
+            Set[str]: Conjunto de estados alcanzables desde el estado inicial
         """
         if self.estado_inicial not in self.estados:
             # Si q0 no es válido, no hay estados alcanzables definibles.
@@ -220,12 +189,14 @@ class AFD:
         cola: List[str] = [self.estado_inicial]
         visitados.add(self.estado_inicial)
 
-        # BFS clásico usando una lista como cola (FIFO mediante pop(0)).
-        while cola:
-            actual = cola.pop(0)
+        # Cola con índice: no desplaza todos los elementos al sacar uno.
+        indice = 0
+        while indice < len(cola):
+            actual = cola[indice]
+            indice += 1
             for simbolo in self.alfabeto:
                 siguiente = self.transiciones.get((actual, simbolo))
-                if siguiente is not None and siguiente not in visitados:
+                if siguiente in self.estados and siguiente not in visitados:
                     visitados.add(siguiente)
                     cola.append(siguiente)
 
@@ -243,7 +214,7 @@ class AFD:
         """Calcula la intersección entre estados finales y estados alcanzables.
 
         Returns:
-            Set[str]: Estados finales que sí pueden ser alcanzados desde q0.
+            Set[str]: Estados finales que sí pueden ser alcanzados desde q0
         """
         return self.estados_finales & self.estados_alcanzables()
 
@@ -251,10 +222,10 @@ class AFD:
         """Determina si el lenguaje reconocido por el autómata es vacío.
 
         El lenguaje L(M) es vacío si y solo si ningún estado final es
-        alcanzable desde el estado inicial q0.
+        alcanzable desde el estado inicial q0
 
         Returns:
-            bool: True si L(M) = vacío (ningún estado final es alcanzable).
+            bool: True si L(M) = vacío (ningún estado final es alcanzable)
         """
         return len(self.estados_finales_alcanzables()) == 0
 
@@ -265,7 +236,7 @@ class AFD:
         """Genera una representación textual formal de M = (Q, Sigma, delta, q0, F).
 
         Returns:
-            str: Cadena formateada mostrando cada componente de la quíntupla.
+            str: Cadena formateada mostrando cada componente de la quíntupla
         """
         lineas = [
             f"Autómata: {self.nombre}",
@@ -284,7 +255,7 @@ class AFD:
 
         Returns:
             str: Tabla con filas = estados, columnas = símbolos del alfabeto.
-            El estado inicial se marca con '->' y los finales con '*'.
+            El estado inicial se marca con '->' y los finales con '*'
         """
         estados_ordenados = sorted(self.estados)
         simbolos_ordenados = sorted(self.alfabeto)
@@ -292,7 +263,7 @@ class AFD:
         # Se calcula el ancho de columna para alinear la tabla.
         ancho_estado = max([len("ESTADO")] + [len(e) for e in estados_ordenados]) + 4
         ancho_columna = max(
-            [8] + [len(s) for s in simbolos_ordenados]
+            [8] + [len(s) for s in simbolos_ordenados] + [len(e) for e in estados_ordenados]
         ) + 4
 
         encabezado = "ESTADO".ljust(ancho_estado)
@@ -314,15 +285,15 @@ class AFD:
             lineas.append(fila)
 
         lineas.append("")
-        lineas.append("Leyenda: '->' estado inicial, '*' estado final, '-' transición no definida.")
+        lineas.append("Leyenda: '->' estado inicial, '*' estado final, '-' transición no definida")
         return "\n".join(lineas)
 
     def generar_reporte_validacion(self) -> str:
-        """Genera un reporte textual completo de validación estructural.
+        """Genera un reporte textual completo de validación estructural
 
         Integra: validación de quíntupla, determinismo, alcanzabilidad y
         vacuidad del lenguaje. Pensado para mostrarse directamente en la
-        opción 5 del menú principal.
+        opción 6 del menú principal
 
         Returns:
             str: Reporte completo formateado en texto plano.
@@ -330,6 +301,8 @@ class AFD:
         secciones: List[str] = []
         secciones.append(f"=== REPORTE DE VALIDACIÓN: {self.nombre} ===\n")
 
+        from validador import ValidadorAutomata
+        secciones.append("[CLASIFICACIÓN] " + ValidadorAutomata().clasificar(self))
         errores_quintupla = self.validar_quintupla()
         if errores_quintupla:
             secciones.append("[QUÍNTUPLA] Se encontraron INCONSISTENCIAS:")
@@ -339,22 +312,25 @@ class AFD:
 
         secciones.append("")
         es_determinista, reportes_det = self.verificar_determinismo()
-        if es_determinista:
+        if es_determinista and not errores_quintupla:
             secciones.append("[DETERMINISMO] El autómata es un AFD válido y completo.")
         else:
             secciones.append("[DETERMINISMO] Se encontraron PROBLEMAS:")
             secciones.extend(f"  - {r}" for r in reportes_det)
 
         secciones.append("")
+        if errores_quintupla or getattr(self, "transiciones_conflictivas", {}):
+            secciones.append("[ANÁLISIS] Corrija la definición antes de analizar su lenguaje.")
+            return "\n".join(secciones)
         alcanzables = self.estados_alcanzables()
-        inaccesibles = self.estados_inaccesibles()
-        finales_alcanzables = self.estados_finales_alcanzables()
+        inaccesibles = self.estados - alcanzables
+        finales_alcanzables = self.estados_finales & alcanzables
         secciones.append(f"[ALCANZABILIDAD] Estados alcanzables desde q0: {sorted(alcanzables)}")
         secciones.append(f"[ALCANZABILIDAD] Estados inaccesibles (Q - alcanzables): {sorted(inaccesibles)}")
         secciones.append(f"[ALCANZABILIDAD] Estados finales alcanzables: {sorted(finales_alcanzables)}")
 
         secciones.append("")
-        if self.lenguaje_vacio():
+        if not finales_alcanzables:
             secciones.append("[LENGUAJE] L(M) es VACÍO: ningún estado final es alcanzable desde q0.")
         else:
             secciones.append("[LENGUAJE] L(M) NO es vacío: existe al menos un estado final alcanzable.")
