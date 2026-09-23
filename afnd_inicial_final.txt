@@ -1,0 +1,11 @@
+NOMBRE=AFND_inicial_final
+TIPO=AFND
+ESTADOS=q0,q1
+ALFABETO=a,b
+INICIAL=q0
+FINALES=q0
+TRANSICIONES:
+q0,a,q0|q1
+q0,b,∅
+q1,a,q1
+q1,b,∅

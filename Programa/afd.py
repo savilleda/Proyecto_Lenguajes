@@ -1,39 +1,21 @@
-# -*- coding: utf-8 -*-
-"""Módulo 2: Modelo y Motor de Validación Estructural.
-
-Este módulo define la clase `AFD`, que encapsula la quíntupla formal
-M = (Q, Sigma, delta, q0, F) de un Autómata Finito Determinista, así como
-todas las operaciones de validación estructural y análisis de alcanzabilidad
-requeridas para certificar que el autómata está correctamente definido.
-
-Estructuras de datos utilizadas (obligatorio por especificación):
-    - Q (estados) y Sigma (alfabeto): conjuntos (set) -> permiten pertenencia
-      O(1) amortizado y evitan duplicados de forma natural.
-    - delta (transiciones): diccionario (dict) cuya clave es la tupla
-      (estado_actual, simbolo) y cuyo valor es el estado_siguiente. Esto
-      representa una función matemática delta: Q x Sigma -> Q sin recurrir
-      a estructuras condicionales extensas (if/elif encadenados)
-"""
-
 from typing import Dict, List, Set, Tuple
-
 
 class ErrorValidacionAFD(Exception):
     """Excepción específica para errores de validación estructural del AFD.
 
     Se lanza cuando la quíntupla no cumple las condiciones formales de un
     Autómata Finito Determinista (por ejemplo, q0 fuera de Q, F no
-    subconjunto de Q, transiciones inconsistentes, etc.).
+    subconjunto de Q, transiciones inconsistentes, etc)
     """
     pass
 
 
 class AFD:
-    """Representa un Autómata Finito Determinista mediante su quíntupla formal.
+    """Representa un Autómata Finito Determinista mediante su quíntupla formal
 
     M = (Q, Sigma, delta, q0, F)
 
-    Attributes:
+    Attributos:
         nombre (str): Nombre identificador del autómata (uso descriptivo).
         estados (Set[str]): Conjunto Q de todos los estados del autómata.
         alfabeto (Set[str]): Conjunto Sigma de símbolos válidos de entrada.
@@ -52,17 +34,7 @@ class AFD:
         estado_inicial: str = "",
         estados_finales: Set[str] = None,
     ) -> None:
-        """Inicializa la quíntupla del autómata.
-
-        Args:
-            nombre: Nombre descriptivo del AFD.
-            estados: Conjunto Q de estados. Si es None, se inicializa vacío.
-            alfabeto: Conjunto Sigma de símbolos. Si es None, se inicializa vacío.
-            transiciones: Diccionario delta (estado, simbolo) -> estado.
-                Si es None, se inicializa vacío.
-            estado_inicial: Estado q0.
-            estados_finales: Conjunto F de estados de aceptación. Si es None,
-                se inicializa vacío.
+        """Inicializa la quíntupla del autómata
         """
         self.nombre: str = nombre
         # Se usan sets para garantizar unicidad automática de elementos.
@@ -81,47 +53,27 @@ class AFD:
     # VALIDACIÓN DE LA QUÍNTUPLA FORMAL
     # ------------------------------------------------------------------
     def validar_quintupla(self) -> List[str]:
-        """Valida las condiciones formales básicas de la quíntupla M.
+        """Valida las condiciones formales básicas de la quíntupla M
 
         Verifica, en orden:
-            1. q0 pertenece a Q.
-            2. F es subconjunto de Q.
+            1. q0 pertenece a Q
+            2. F es subconjunto de .
             3. Toda transición usa estados de origen/destino en Q y
-               símbolos en Sigma (consistencia de dominio y codominio).
+               símbolos en Sigma (consistencia de dominio y codominio)
 
-        Returns:
-            List[str]: Lista de mensajes de error encontrados. Una lista
-            vacía indica que la quíntupla es formalmente consistente.
+        Regresa una lista de mensajes de error encontrados. Una lista vacía indica
+        que la quíntupla es formalmente consistente.
         """
         # Se centralizan las reglas para usarlas también con AFND.
         from validador import ValidadorAutomata
         return ValidadorAutomata().errores(self)
 
-    # ------------------------------------------------------------------
-    # VERIFICACIÓN DE DETERMINISTICIDAD
-    # ------------------------------------------------------------------
     def verificar_determinismo(self) -> Tuple[bool, List[str]]:
-        """Verifica que delta esté totalmente definida y sea determinista.
-
-        Un AFD válido requiere que, para CADA estado q en Q y CADA símbolo
-        a en Sigma, exista EXACTAMENTE una transición delta(q, a). Como se
-        usa un diccionario (una clave -> un único valor), la multiplicidad
-        de transiciones (característica de un AFND) no puede representarse
-        directamente en `self.transiciones`; por ello, la detección de
-        transiciones múltiples se realiza durante la carga de datos
-        (Módulo 1), y aquí se reportan como advertencias registradas en
-        `self.transiciones_conflictivas` si dicho atributo existe.
-
-        Returns:
-            Tuple[bool, List[str]]: Una tupla (es_determinista, reportes)
-            donde `es_determinista` es True si delta está completamente
-            definida sin ambigüedades, y `reportes` contiene el detalle
-            de cada anomalía encontrada (faltantes o conflictos).
-        """
+        """Verifica que delta esté totalmente definida y sea determinista"""
         reportes: List[str] = []
 
         # Se recorre cada combinación posible (q, a) en Q x Sigma para
-        # comprobar que exista una transición definida.
+        # comprobar que exista una transición definida
         for estado in sorted(self.estados):
             for simbolo in sorted(self.alfabeto):
                 clave = (estado, simbolo)
@@ -132,7 +84,7 @@ class AFD:
                     )
 
         # Se reportan conflictos de multiplicidad detectados en la carga,
-        # si el cargador los registró explícitamente (ver cargador.py).
+        # si el cargador los registró explícitamente (ver cargador.py)
         conflictos = getattr(self, "transiciones_conflictivas", {})
         for (estado, simbolo), destinos in conflictos.items():
             reportes.append(
@@ -176,10 +128,10 @@ class AFD:
 
         Se recorre el grafo de transiciones en anchura (BFS) partiendo del
         estado inicial, siguiendo cada símbolo del alfabeto disponible desde
-        el estado actual.
+        el estado actual
 
-        Returns:
-            Set[str]: Conjunto de estados alcanzables desde el estado inicial
+        Regresa un conjunto de estados que pueden alcanzarse desde q0 siguiendo
+        las transiciones definidas en delta.
         """
         if self.estado_inicial not in self.estados:
             # Si q0 no es válido, no hay estados alcanzables definibles.
@@ -203,29 +155,26 @@ class AFD:
         return visitados
 
     def estados_inaccesibles(self) -> Set[str]:
-        """Calcula los estados que jamás pueden alcanzarse desde q0.
+        """Calcula los estados que jamás pueden alcanzarse desde q0
 
-        Returns:
-            Set[str]: Q menos el conjunto de estados alcanzables (Q - alcanzables).
+        Regresa el conjunto de estados que no son alcanzables desde el estado inicial
         """
         return self.estados - self.estados_alcanzables()
 
     def estados_finales_alcanzables(self) -> Set[str]:
-        """Calcula la intersección entre estados finales y estados alcanzables.
+        """Calcula la intersección entre estados finales y estados alcanzables
 
-        Returns:
-            Set[str]: Estados finales que sí pueden ser alcanzados desde q0
+        Regresa el conjunto de estados finales que también son alcanzables desde el estado inicial.
         """
         return self.estados_finales & self.estados_alcanzables()
 
     def lenguaje_vacio(self) -> bool:
-        """Determina si el lenguaje reconocido por el autómata es vacío.
+        """Determina si el lenguaje reconocido por el autómata es vacío
 
         El lenguaje L(M) es vacío si y solo si ningún estado final es
         alcanzable desde el estado inicial q0
 
-        Returns:
-            bool: True si L(M) = vacío (ningún estado final es alcanzable)
+        Regresa True si L(M) = vacío (ningún estado final es alcanzable)
         """
         return len(self.estados_finales_alcanzables()) == 0
 
@@ -233,10 +182,9 @@ class AFD:
     # REPRESENTACIONES TEXTUALES (QUÍNTUPLA Y TABLA DE TRANSICIÓN)
     # ------------------------------------------------------------------
     def quintupla_formal(self) -> str:
-        """Genera una representación textual formal de M = (Q, Sigma, delta, q0, F).
+        """Genera una representación textual formal de M = (Q, Sigma, delta, q0, F)
 
-        Returns:
-            str: Cadena formateada mostrando cada componente de la quíntupla
+        Regresa una cadena de texto que muestra cada componente de la quíntupla
         """
         lineas = [
             f"Autómata: {self.nombre}",
@@ -251,16 +199,14 @@ class AFD:
         return "\n".join(lineas)
 
     def tabla_transicion(self) -> str:
-        """Construye la tabla de transición en formato de matriz legible.
+        """Construye la tabla de transición en formato de matriz legible
 
-        Returns:
-            str: Tabla con filas = estados, columnas = símbolos del alfabeto.
-            El estado inicial se marca con '->' y los finales con '*'
+        Regresa una cadena de texto con la tabla de transición, donde las filas corresponden a los estados y las columnas a los símbolos del alfabeto
         """
         estados_ordenados = sorted(self.estados)
         simbolos_ordenados = sorted(self.alfabeto)
 
-        # Se calcula el ancho de columna para alinear la tabla.
+        # Se calcula el ancho de columna para alinear la tabla
         ancho_estado = max([len("ESTADO")] + [len(e) for e in estados_ordenados]) + 4
         ancho_columna = max(
             [8] + [len(s) for s in simbolos_ordenados] + [len(e) for e in estados_ordenados]
@@ -295,8 +241,7 @@ class AFD:
         vacuidad del lenguaje. Pensado para mostrarse directamente en la
         opción 6 del menú principal
 
-        Returns:
-            str: Reporte completo formateado en texto plano.
+        Regresa una cadena de texto que contiene el reporte completo de validación del autómata
         """
         secciones: List[str] = []
         secciones.append(f"=== REPORTE DE VALIDACIÓN: {self.nombre} ===\n")
@@ -340,7 +285,6 @@ class AFD:
     def __str__(self) -> str:
         """Representación en cadena del AFD (equivalente a la quíntupla formal).
 
-        Returns:
-            str: Ver `quintupla_formal`.
+        Regresa una cadena de texto que muestra la quíntupla formal del autómata
         """
         return self.quintupla_formal()

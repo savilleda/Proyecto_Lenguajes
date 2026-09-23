@@ -1,235 +1,169 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""Módulo 4: Interfaz de Consola y Menú Principal.
-
-Punto de entrada de la aplicación. Orquesta los módulos `cargador`,
-`afd` y `simulador` a través de un menú interactivo de 10 opciones.
-
-Ejecución:
-    python main.py
-
-Solo se emplea la biblioteca estándar de Python (os, sys, typing, re
-indirectamente a través de `cargador`).
-"""
-
-import sys
-from typing import Optional
-
 from afd import AFD
-from cargador import leer_afd_manual, leer_afd_desde_archivo
+from afnd import AFND
+from cargador import CargadorAutomata
+from conversor import ConversorAFND
 from simulador import Simulador
+from validador import ValidadorAutomata
 
 
 class AplicacionAFD:
-    """Controlador principal de la aplicación de consola.
-
-    Attributes:
-        afd_actual (Optional[AFD]): AFD actualmente cargado en memoria.
-        simulador (Simulador): Instancia única del motor de simulación,
-            que conserva el historial de evaluaciones de la sesión.
-    """
-
-    def __init__(self) -> None:
-        """Inicializa la aplicación sin ningún AFD cargado."""
-        self.afd_actual: Optional[AFD] = None
-        self.simulador: Simulador = Simulador()
-
-    # ------------------------------------------------------------------
-    # UTILIDADES DE PRESENTACIÓN
-    # ------------------------------------------------------------------
-    @staticmethod
-    def imprimir_menu() -> None:
-        """Imprime el menú principal de 10 opciones en consola."""
-        print("\n" + "=" * 55)
-        print("   SIMULADOR DE AUTÓMATA FINITO DETERMINISTA (AFD)")
-        print("=" * 55)
-        print(" 1. Crear un AFD manualmente")
-        print(" 2. Cargar un AFD desde un archivo .txt")
-        print(" 3. Mostrar la definición formal del AFD (Quíntupla)")
-        print(" 4. Mostrar la tabla de transición")
-        print(" 5. Validar la estructura del autómata")
-        print(" 6. Evaluar una cadena (con traza paso a paso)")
-        print(" 7. Evaluar un archivo de cadenas en lote")
-        print(" 8. Consultar el historial de evaluaciones")
-        print(" 9. Cargar o crear otro autómata")
-        print("10. Salir")
-        print("=" * 55)
-
-    def _hay_afd_cargado(self) -> bool:
-        """Verifica si existe un AFD cargado, informando al usuario si no.
-
-        Returns:
-            bool: True si `self.afd_actual` no es None.
-        """
-        if self.afd_actual is None:
-            print("\n[!] No hay ningún AFD cargado. Use la opción 1 o 2 primero.")
-            return False
-        return True
-
-    # ------------------------------------------------------------------
-    # OPCIONES DEL MENÚ
-    # ------------------------------------------------------------------
-    def opcion_crear_manual(self) -> None:
-        """Opción 1: Crea un AFD mediante entrada manual por consola."""
-        nuevo_afd = leer_afd_manual()
-        if nuevo_afd is not None:
-            self.afd_actual = nuevo_afd
-            self.simulador = Simulador()  # Se reinicia el historial al cambiar de AFD.
-
-    def opcion_cargar_desde_archivo(self) -> None:
-        """Opción 2: Carga un AFD desde un archivo .txt especificado por el usuario."""
-        try:
-            ruta = input("\nRuta del archivo .txt a cargar: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n[!] Operación cancelada.")
-            return
-
-        afd_cargado, advertencias = leer_afd_desde_archivo(ruta)
-
-        for advertencia in advertencias:
-            print(f"  [!] {advertencia}")
-
-        if afd_cargado is None:
-            print("\n[ERROR] No fue posible construir el AFD a partir del archivo.")
-            return
-
-        self.afd_actual = afd_cargado
+    def __init__(self):
+        self.original = None
+        self.afd_actual = None
+        self.cargador = CargadorAutomata()
+        self.validador = ValidadorAutomata()
+        self.conversor = ConversorAFND()
         self.simulador = Simulador()
-        print(f"\n[OK] AFD '{afd_cargado.nombre}' cargado correctamente desde '{ruta}'.")
 
-    def opcion_mostrar_quintupla(self) -> None:
-        """Opción 3: Muestra la definición formal (quíntupla) del AFD activo."""
-        if not self._hay_afd_cargado():
-            return
-        print("\n" + self.afd_actual.quintupla_formal())
+    def instalar(self, automata):
+        """Solo una carga exitosa sustituye la sesión anterior."""
+        self.original = automata
+        self.afd_actual = automata if isinstance(automata, AFD) else None
+        self.conversor = ConversorAFND()
+        self.simulador = Simulador()
+        print(f"\nCargado: {automata.nombre}")
+        print(self.validador.clasificar(automata))
+        if isinstance(automata, AFND):
+            print(automata.tabla_transicion())
+            self.convertir()  # Conversión automática exigida en la Fase 2.
 
-    def opcion_mostrar_tabla(self) -> None:
-        """Opción 4: Muestra la tabla de transición en formato matriz."""
-        if not self._hay_afd_cargado():
-            return
-        print("\n" + self.afd_actual.tabla_transicion())
-
-    def opcion_validar_estructura(self) -> None:
-        """Opción 5: Ejecuta y muestra el reporte completo de validación estructural."""
-        if not self._hay_afd_cargado():
-            return
-        print("\n" + self.afd_actual.generar_reporte_validacion())
-
-        _, faltantes = self.afd_actual.verificar_determinismo()
-        hay_incompletas = any("faltante" in r for r in faltantes)
-        if hay_incompletas:
-            resp = input("\n¿Desea completar el AFD con un estado trampa? (s/n): ").strip().lower()
-            if resp == "s":
-                trampa = self.afd_actual.completar_con_estado_trampa()
-                if trampa:
-                    print(f"[OK] Se agregó el estado trampa '{trampa}'. El AFD ahora es completo.")
-
-    def opcion_evaluar_cadena(self) -> None:
-        """Opción 6: Solicita una cadena y muestra su traza de evaluación paso a paso."""
-        if not self._hay_afd_cargado():
-            return
-        try:
-            cadena = input(
-                "\nIngrese la cadena a evaluar (ENTER para cadena vacía ε): "
-            )
-        except (EOFError, KeyboardInterrupt):
-            print("\n[!] Operación cancelada.")
-            return
-        self.simulador.evaluar_cadena(self.afd_actual, cadena, mostrar_traza=True)
-
-    def opcion_evaluar_lote(self) -> None:
-        """Opción 7: Evalúa un archivo de cadenas y muestra el reporte consolidado."""
-        if not self._hay_afd_cargado():
-            return
-        try:
-            ruta = input("\nRuta del archivo de cadenas a evaluar en lote: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n[!] Operación cancelada.")
-            return
-
-        resultados, advertencias = self.simulador.evaluar_lote(self.afd_actual, ruta)
-        for advertencia in advertencias:
-            print(f"  [!] {advertencia}")
-
-        print("\n" + self.simulador.generar_reporte_lote(resultados))
-
-    def opcion_mostrar_historial(self) -> None:
-        """Opción 8: Muestra el historial acumulado de evaluaciones de la sesión."""
-        print("\n" + self.simulador.mostrar_historial())
-
-    def opcion_cargar_otro(self) -> None:
-        """Opción 9: Permite descartar el AFD actual y crear/cargar uno nuevo."""
-        print("\n--- CARGAR O CREAR OTRO AUTÓMATA ---")
-        print(" a) Crear manualmente")
-        print(" b) Cargar desde archivo .txt")
-        try:
-            sub_opcion = input("Seleccione una sub-opción (a/b): ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print("\n[!] Operación cancelada.")
-            return
-
-        if sub_opcion == "a":
-            self.opcion_crear_manual()
-        elif sub_opcion == "b":
-            self.opcion_cargar_desde_archivo()
+    def cargar(self, tipo, archivo=False):
+        if archivo:
+            ruta = input(f"Ruta del archivo {tipo}: ")
+            automata, errores = self.cargador.desde_archivo(ruta, tipo)
+            for error in errores:
+                print(f"[!] {error}")
         else:
-            print("  [!] Sub-opción inválida. Regresando al menú principal.")
+            automata = self.cargador.manual(tipo)
+        if automata is not None:
+            self.instalar(automata)
 
-    # ------------------------------------------------------------------
-    # BUCLE PRINCIPAL
-    # ------------------------------------------------------------------
-    def ejecutar(self) -> None:
-        """Ejecuta el bucle principal del menú hasta que el usuario elige salir."""
-        # Diccionario de despacho: mapea cada opción numérica a su método
-        # correspondiente, evitando una larga cadena de if/elif.
-        acciones = {
-            "1": self.opcion_crear_manual,
-            "2": self.opcion_cargar_desde_archivo,
-            "3": self.opcion_mostrar_quintupla,
-            "4": self.opcion_mostrar_tabla,
-            "5": self.opcion_validar_estructura,
-            "6": self.opcion_evaluar_cadena,
-            "7": self.opcion_evaluar_lote,
-            "8": self.opcion_mostrar_historial,
-            "9": self.opcion_cargar_otro,
-        }
+    def exigir_original(self):
+        if self.original is None:
+            raise ValueError("Primero cree o cargue un autómata.")
 
+    def exigir_afd(self):
+        if self.afd_actual is None:
+            raise ValueError("Primero cargue un AFD o complete la conversión del AFND.")
+        self.validador.exigir_afd(self.afd_actual)
+
+    def mostrar(self):
+        self.exigir_original()
+        print("\nAUTÓMATA ORIGINAL")
+        print(self.original.quintupla_formal())
+        print(self.original.tabla_transicion())
+        if isinstance(self.original, AFND) and self.afd_actual is not None:
+            print("\nAFD EQUIVALENTE")
+            print(self.afd_actual.quintupla_formal())
+            print(self.afd_actual.tabla_transicion())
+
+    def validar(self):
+        self.exigir_original()
+        print(self.validador.clasificar(self.original))
+        for error in self.validador.errores(self.original):
+            print(f"[!] {error}")
+        if self.afd_actual is not None:
+            print(self.afd_actual.generar_reporte_validacion())
+            if self.validador.clasificar(self.afd_actual) == "AFD incompleto":
+                respuesta = input("¿Completar con estado trampa? (s/n): ").strip().lower()
+                if respuesta == "s":
+                    trampa = self.afd_actual.completar_con_estado_trampa()
+                    print(f"Se agregó {trampa}.")
+
+    def convertir(self):
+        self.exigir_original()
+        if not isinstance(self.original, AFND):
+            raise ValueError("La opción 7 requiere un AFND válido cargado.")
+        # Repetir la consulta no borra un historial de evaluaciones ya realizadas.
+        if self.afd_actual is None:
+            self.afd_actual = self.conversor.convertir(self.original)
+        print("Conversión terminada.")
+        print(self.conversor.tabla_equivalencias())
+        print(self.afd_actual.tabla_transicion())
+
+    def equivalencias(self):
+        print(self.conversor.tabla_equivalencias())
+
+    def tabla_generada(self):
+        if not isinstance(self.original, AFND) or self.afd_actual is None:
+            raise ValueError("No hay un AFD generado a partir de un AFND.")
+        print(self.afd_actual.tabla_transicion())
+
+    def evaluar(self):
+        self.exigir_afd()
+        cadena = input("Cadena (ENTER: cadena vacía): ")
+        self.simulador.evaluar_cadena(self.afd_actual, cadena)
+
+    def lote(self):
+        self.exigir_afd()
+        ruta = input("Archivo de cadenas (cada línea vacía representa epsilon): ")
+        resultados, errores = self.simulador.evaluar_lote(self.afd_actual, ruta.strip().strip('"'))
+        for error in errores:
+            print(f"[!] {error}")
+        print(self.simulador.generar_reporte_lote(resultados))
+
+    def historial(self):
+        print(self.simulador.mostrar_historial())
+
+    def analisis(self):
+        self.exigir_afd()
+        print(self.afd_actual.generar_reporte_validacion())
+
+    def otro(self):
+        print("1. AFD manual\n2. Archivo AFD\n3. AFND manual\n4. Archivo AFND")
+        opcion = input("Opción: ").strip()
+        opciones = {"1": ("AFD", False), "2": ("AFD", True),
+                    "3": ("AFND", False), "4": ("AFND", True)}
+        if opcion not in opciones:
+            raise ValueError("Seleccione una opción del 1 al 4.")
+        self.cargar(*opciones[opcion])
+
+    def ejecutar(self):
+        acciones = {"1": lambda: self.cargar("AFD"),
+                    "2": lambda: self.cargar("AFD", True),
+                    "3": lambda: self.cargar("AFND"),
+                    "4": lambda: self.cargar("AFND", True),
+                    "5": self.mostrar, "6": self.validar, "7": self.convertir,
+                    "8": self.equivalencias, "9": self.tabla_generada,
+                    "10": self.evaluar, "11": self.lote, "12": self.historial,
+                    "13": self.analisis, "14": self.otro}
+        menu = """
+=== MOTOR DE AUTÓMATAS: FASES 1 Y 2 ===
+ 1. Crear AFD manualmente
+ 2. Cargar AFD desde archivo
+ 3. Crear AFND manualmente
+ 4. Cargar AFND desde archivo
+ 5. Definición formal y tabla del autómata
+ 6. Validar estructura / completar AFD con trampa
+ 7. Convertir AFND a AFD
+ 8. Tabla de equivalencias de macroestados
+ 9. Tabla del AFD generado
+10. Evaluar cadena
+11. Evaluar archivo de cadenas
+12. Historial de evaluaciones
+13. Análisis estructural del AFD
+14. Cargar o crear otro autómata
+15. Salir"""
         while True:
-            self.imprimir_menu()
             try:
-                opcion = input("Seleccione una opción (1-10): ").strip()
+                print(menu)
+                opcion = input("Opción: ").strip()
+                if opcion == "15":
+                    break
+                accion = acciones.get(opcion)
+                if accion is None:
+                    print("[!] Seleccione un número del 1 al 15.")
+                else:
+                    accion()
             except (EOFError, KeyboardInterrupt):
-                print("\n\nSaliendo del programa. ¡Hasta luego!")
+                print("\nSesión finalizada.")
                 break
-
-            if opcion == "10":
-                print("\nSaliendo del programa. ¡Hasta luego!")
-                break
-
-            accion = acciones.get(opcion)
-            if accion is None:
-                print("\n[!] Opción inválida. Por favor, seleccione un número del 1 al 10.")
-                continue
-
-            # Cada acción está protegida individualmente: un error inesperado
-            # en una opción no debe colapsar el bucle principal de la app.
-            try:
-                accion()
-            except Exception as error:
-                print(f"\n[ERROR INESPERADO] {error}")
-                print("La aplicación continúa en ejecución.")
+            except (ValueError, OSError, UnicodeError) as error:
+                print(f"[!] {error}")
 
 
-def main() -> None:
-    """Función de entrada del programa."""
-    try:
-        app = AplicacionAFD()
-        app.ejecutar()
-    except Exception as error:
-        # Red de seguridad de último nivel: ni siquiera un fallo catastrófico
-        # debería producir un traceback sin control ante el usuario final.
-        print(f"[ERROR FATAL] La aplicación se detuvo de forma inesperada: {error}")
-        sys.exit(1)
+def main():
+    AplicacionAFD().ejecutar()
 
 
 if __name__ == "__main__":
